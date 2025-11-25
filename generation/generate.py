@@ -7,9 +7,9 @@ import csv
 import psycopg2
 
 MAX_EVENTS = 100000
-BI_SIGNAL_FILE = "bi_signal.csv"
-MONO_SIGNAL_FILE = "mono_signal.csv"
-TOWER_SIGNAL_FILE = "tower_signal.csv"
+BI_SIGNAL_FILE = "generation/bi_signal.csv"
+MONO_SIGNAL_FILE = "generation/mono_signal.csv"
+TOWER_SIGNAL_FILE = "generation/tower_signal.csv"
 DISPOSITIONS = ["connected", "busy", "failed", "connected"]
 
 PG_HOST = "localhost"
@@ -73,6 +73,7 @@ def generate_tower_signal(tower_writer, tower_batch, data):
 
 
 def save_mono_signal(mono_writer, mono_batch, data):
+    print("writing to csv")
     mono_writer.writerow([
         data["unique_id"],
         data["start_timestamp"],
@@ -117,7 +118,7 @@ def save_bi_signal(bi_writer, bi_batch, data):
 
 def save_iteration_data(mono_writer, bi_writer, tower_writer,
                         mono_batch, bi_batch, tower_batch,
-                        iteration, throughput, base_time, threshold):
+                        iteration, throughput, base_time, threshold, save=True):
 
     records = []
 
@@ -145,10 +146,13 @@ def save_iteration_data(mono_writer, bi_writer, tower_writer,
 
     records.sort(key=lambda x: x["end_timestamp"])
 
-    for data in records:
-        save_bi_signal(bi_writer, bi_batch, data)
-        save_mono_signal(mono_writer, mono_batch, data)
-        generate_tower_signal(tower_writer, tower_batch, data)
+    if save:
+        for data in records:
+            save_bi_signal(bi_writer, bi_batch, data)
+            save_mono_signal(mono_writer, mono_batch, data)
+            generate_tower_signal(tower_writer, tower_batch, data)
+    else:
+        return data
 
 
 # ------------------ main ------------------
@@ -206,12 +210,14 @@ def main():
     with open(MONO_SIGNAL_FILE, 'w') as mono_file, \
          open(BI_SIGNAL_FILE, 'w') as bi_file, \
          open(TOWER_SIGNAL_FILE, 'w') as tower_file:
+        
+        print("csv files opened")
 
         mono_writer = csv.writer(mono_file)
         bi_writer = csv.writer(bi_file)
         tower_writer = csv.writer(tower_file)
 
-        mono_writer.writerow(["unique id", "start_ts", "end_ts", "caller", "callee", "disposition", "imei"])
+        mono_writer.writerow(["unique_id", "start_ts", "end_ts", "caller", "callee", "disposition", "imei"])
         bi_writer.writerow(["unique_id", "event_type", "caller", "callee", "timestamp", "disposition", "imei"])
         tower_writer.writerow(["unique_id", "tower", "start_ts", "end_ts"])
 

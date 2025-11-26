@@ -41,10 +41,6 @@ rate_df = (
 
 stream_with_id = rate_df.withColumn("id", (col("value") % row_count) + 1)
 
-# Global list to accumulate all processed stream data on the driver (for demonstration only)
-GLOBAL_DATA_ACCUMULATOR = []
-# Initialize a dummy static view for the batch query to read from on startup
-spark.createDataFrame(GLOBAL_DATA_ACCUMULATOR, csv_df.schema).createOrReplaceTempView("static_data_store")
 
 TOTAL_WINDOW_SIZE = 40
 WATERMARK = 10
@@ -70,11 +66,13 @@ def sql_query(timestamp, dataframe):
     result = spark.sql(query)
     result.show(truncate=False)
 
+
+
 class WatermarkListener(StreamingQueryListener):
     def __init__(self):
         self.last_triggered_wm = 1764079950000 + WATERMARK
         self.trigger_interval  = TOTAL_WINDOW_SIZE - WATERMARK 
-        self.file = open("watermarks","w")
+        self.file = open("/home/siddharth/StreamingDataSystems/endsem_project/processing_spark/mono/watermarks","w")
 
     def onQueryStarted(self, event):
         pass
@@ -84,6 +82,8 @@ class WatermarkListener(StreamingQueryListener):
 
     def onQueryProgress(self, event):
         wm = event.progress.eventTime.get("watermark")
+
+        print(f"\n{wm}\n")
 
         if wm:
             dt = datetime.datetime.strptime(wm.replace('Z', '+0000'), "%Y-%m-%dT%H:%M:%S.%f%z")
@@ -99,6 +99,7 @@ class WatermarkListener(StreamingQueryListener):
 
 spark.streams.addListener(WatermarkListener())
 
+
 joined_df = (
     stream_with_id
         .join(csv_df, on="id", how="left")
@@ -112,5 +113,27 @@ calls_with_ts = joined_df.withColumn(
 
 calls_with_wm = calls_with_ts.withWatermark("event_ts", "1 seconds") 
 
-while (True):
-    
+wm_file = open("/home/siddharth/StreamingDataSystems/endsem_project/processing_spark/mono/watermarks","r")
+
+last_triggered_wm = 1764079950000 + WATERMARK
+trigger_interval  = TOTAL_WINDOW_SIZE - WATERMARK 
+
+
+def query(_,__):
+    lines = wm_file.readlines()
+    if not lines:
+        return
+    watermark = int(lines[-1])
+    if watermark > last_triggered_wm + trigger_interval:
+        last_triggered_wm = watermark
+
+        sql_query(watermark,calls_with_wm)
+
+
+final_query = (
+    calls_with_wm.writeStream
+        .foreachBatch(query)
+        .start()
+)
+
+final_query.awaitTermination()

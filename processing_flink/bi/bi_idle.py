@@ -1,15 +1,3 @@
-#!/usr/bin/env python3
-"""
-Batch idle detection (bi) — full-run latency; outputs gaps ordered by detection time (start_ts).
-
-Usage:
-python3 batch_idle_bi_ordered.py --input generation/bi_signal.csv --threshold-secs 30
-
-Outputs:
-Printed rows (caller, prev_end, start_ts, idle_ms) in chronological order, then:
-QUERY_LATENCY_MS:<ms>
-RESULT_ROWS:<n>
-"""
 import argparse
 import time
 from pyflink.table import EnvironmentSettings, TableEnvironment
@@ -44,12 +32,6 @@ def main():
     """
     tenv.execute_sql(ddl)
 
-    # SQL:
-    # 1) extract starts and ends (using event_ts)
-    # 2) join by unique_id to form intervals (assumes matching start+end exist)
-    # 3) compute previous end per caller using LAG ordered by start_ts
-    # 4) filter gaps >= threshold
-    # 5) ORDER BY start_ts to get chronological gap detection ordering
     sql = f"""
     WITH
       starts AS (

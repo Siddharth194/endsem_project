@@ -1,29 +1,3 @@
-#!/usr/bin/env python3
-"""
-flink_bi_csv_delta_windows.py
-
-Process bi_signal.csv using delta (+1 on start, -1 on end) per window.
-Preprocess CSV into per-window aggregates (delta_sum, max_event_ts),
-then feed those aggregated lines into a PyFlink DataStream job.
-
-Semantics:
- - event_type=0 (Start) -> +1
- - event_type=1 (End)   -> -1
- - Active Calls = Cumulative sum of deltas over time.
-
-Metrics:
- - publish_latency_ms: Processing Latency (publish_time - max_ingest_ms).
-   (Time taken from injecting the window into Flink to publishing the result).
-
-Usage:
- python3 flink_bi_csv_delta_windows.py \
-   --input generation/bi_signal.csv \
-   --lead-ms 2000 \
-   --watermark-end-secs 2 \
-   --output bi_windows_out.csv \
-   --parallelism 1
-"""
-
 import argparse
 import csv
 import time
@@ -40,7 +14,6 @@ from pyflink.common.watermark_strategy import WatermarkStrategy
 WINDOW_MS = 30_000  # 30s windows
 
 
-# ----------------- Preprocessing: compute per-window deltas -----------------
 def preprocess_bi_to_window_aggregates(bi_csv_path, window_ms):
     """
     Read bi_signal.csv and compute per-window aggregates:
@@ -85,11 +58,9 @@ def preprocess_bi_to_window_aggregates(bi_csv_path, window_ms):
             if ts > ent['max_event_ts']:
                 ent['max_event_ts'] = ts
 
-    # Return ordered by window_start to ensure chronological processing
     return OrderedDict(sorted(window_map.items(), key=lambda x: x[0]))
 
 
-# ----------------- Flink user functions -----------------
 class ParseAggregateMap(MapFunction):
     """
     Input line format: window_start,delta_sum,max_event_ts
@@ -115,8 +86,6 @@ class ParseAggregateMap(MapFunction):
         except Exception:
             return None
             
-        # Capture ingest time NOW (inside the pipeline)
-        # We do NOT shift this. This is the real-world time the system started processing this window.
         current_ingest_ts = int(time.time() * 1000)
 
         return {
@@ -136,15 +105,7 @@ class EndTimestampAssigner:
 
 
 class WindowDeltaEmitter(KeyedProcessFunction):
-    """
-    Maintains cumulative active calls using a single global key.
-    
-    State:
-      - prev_active (LONG): The running total of active calls from all previous windows.
-      - elem_state (MapState): Stores pending window data keyed by [timer_timestamp].
-        Using MapState prevents overwriting when multiple windows are processed 
-        before the first timer fires (which happens often in backfill/fast replay).
-    """
+
     def __init__(self, watermark_ms, output_file):
         super().__init__()
         self.watermark_ms = int(watermark_ms)
@@ -211,8 +172,7 @@ class WindowDeltaEmitter(KeyedProcessFunction):
         # 3. Calculate Latency
         publish_time = int(time.time() * 1000)
         
-        # PROCESSING LATENCY: Real-world time spent in system
-        # (Publish Time - Time the record entered the Map function)
+
         publish_latency_ms = publish_time - max_ingest_ms
         
         # Event Wait: How long after the "timer" timestamp did we actually fire?
@@ -246,7 +206,6 @@ class WindowDeltaEmitter(KeyedProcessFunction):
         yield line
 
 
-# ----------------- stats utility -----------------
 def compute_stats_from_file(path):
     if not os.path.exists(path):
         return None
@@ -316,10 +275,7 @@ def main():
     # Compute minimal timestamp to calculate shift
     min_win = min(window_aggs.keys())
     now_ms = int(time.time() * 1000)
-    
-    # Calculate shift so that the first window starts at (Now + lead_ms)
-    # Actually, usually we want the DATA ends to be near now. 
-    # But aligning the *start* of the sequence to Now + lead is safe.
+
     shift_ms = (now_ms + int(args.lead_ms)) - int(min_win)
     
     print(f"Computed shift_ms={shift_ms} (windows_count={len(window_aggs)})")

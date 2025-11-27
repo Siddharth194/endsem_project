@@ -1,18 +1,3 @@
-#!/usr/bin/env python3
-"""
-flink_mono_csv_publish_latency.py
-
-PyFlink DataStream job computing windowed call counts from mono CSV,
-measuring publish latency per window as:
-    publish_latency_ms = publish_time_ms - max_event_timestamp_in_window
-
-Output CSV header:
-  window_start_ms,count,max_ts,timer_ts,publish_time_ms,event_wait_ms,publish_latency_ms,max_type,max_ingest_ms
-
-Usage:
-  python3 flink_mono_csv_publish_latency.py --input generation/mono_signal.csv \
-    --lead-ms 2000 --watermark-end-secs 2 --output mono_windows_out.csv --parallelism 1
-"""
 import argparse
 import csv
 import time

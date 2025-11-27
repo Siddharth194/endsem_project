@@ -1,16 +1,3 @@
-#!/usr/bin/env python3
-"""
-Batch idle detection (mono) — full-run latency; outputs gaps ordered by detection time (start_ts).
-
-Usage:
-python3 batch_idle_mono_ordered.py --input generation/mono_signal.csv --threshold-secs 30
-
-Outputs:
-QUERY_LATENCY_MS:<ms>
-RESULT_ROWS:<n>
-
-Then prints each gap row (caller, prev_end, start_ts, idle_ms) in chronological order.
-"""
 import argparse
 import time
 from pyflink.table import EnvironmentSettings, TableEnvironment

@@ -40,6 +40,7 @@ rate_df = (
         .format("rate")
         .option("rowsPerSecond", 10000)
         .option("rampUpTime", 0)
+        
         .load()
 )
 

@@ -1,6 +1,6 @@
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, window, count, lit, broadcast
-from pyspark.sql.types import StructType, StructField, LongType, IntegerType, TimestampType
+from pyspark.sql.types import StructType, StructField, LongType, IntegerType, TimestampType, StringType
 from pyspark.sql.streaming import StreamingQueryListener
 import datetime
 
@@ -21,10 +21,14 @@ def main():
     # --- 1. Load Static Data ---
     # We define schema explicitly to avoid Integer/Long casting errors
     schema = StructType([
-        StructField("timestamp", LongType(), True),
+        StructField("unique_id", LongType(), True),
         StructField("event_type", IntegerType(), True),
-        StructField("id", LongType(), True),
-        StructField("unique_id", LongType(), True)
+        StructField("caller", StringType(), True),
+        StructField("callee", StringType(), True),
+        StructField("timestamp", LongType(), True),
+        StructField("disposition", StringType(), True),
+        StructField("imei", StringType(), True),
+        StructField("id", LongType(), True)
     ])
 
     static_df = spark.read \
@@ -33,6 +37,8 @@ def main():
         .csv(CSV_PATH) \
         .withColumnRenamed("timestamp", "event_timestamp_ms") \
         .withColumnRenamed("id", "join_id")
+    
+    static_df.show(50, truncate=False)
 
     # Cache for performance since we join against this repeatedly
     static_df.cache()
@@ -49,21 +55,7 @@ def main():
     stream_with_data = rate_stream \
         .withColumn("join_id", col("value") % row_count) \
         .join(broadcast(static_df), "join_id") \
-        
-
-    debug_query = stream_with_data \
-        .select( col("join_id"), \
-            col("event_timestamp_ms") \
-            col("timestamp")
-        ) \
-        .writeStream \
-        .queryName("Debug_Raw_Data") \
-        .outputMode("append") \
-        .format("console") \
-        .option("numRows", 5) \
-        .option("truncate", "false") \
-        .start()
-
+        .withColumnRenamed("timestamp", "rateTimestamp")
         
     stream_with_time = stream_with_data.withColumn(
         "event_time",
@@ -73,21 +65,7 @@ def main():
     # --- 4. Debug Stream (Temporary) ---
     # This query runs in parallel to the main query to inspect the raw incoming data.
     print("--- Starting Debug Query (look for 'Debug Raw Data') ---")
-    # debug_query = stream_with_data \
-    #     .select(
-    #         col("event_time"), 
-    #         col("event_timestamp_ms").alias("static_ts_ms"), # Static timestamp from CSV
-    #         col("event_type"), 
-    #         col("join_id")
-    #     ) \
-    #     .writeStream \
-    #     .queryName("Debug_Raw_Data") \
-    #     .outputMode("append") \
-    #     .format("console") \
-    #     .option("numRows", 5) \
-    #     .option("truncate", "false") \
-    #     .start()
-    
+
     # --- 5. Watermark Listener (Defined by User) ---
     class WatermarkListener(StreamingQueryListener):
         def onQueryStarted(self, event):
@@ -129,7 +107,7 @@ def main():
     # --- 7. Output to Console (Main Query) ---
     # OutputMode "Update" allows us to see the counts update as new data arrives for the window.
     query = windowed_counts.writeStream \
-        .outputMode("update") \
+        .outputMode("append") \
         .queryName("Main_Window_Count") \
         .format("console") \
         .option("truncate", "false") \

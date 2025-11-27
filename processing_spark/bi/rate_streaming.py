@@ -1,5 +1,5 @@
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, window, count, lit, broadcast
+from pyspark.sql.functions import col, window, count, lit, broadcast, max as spark_max
 from pyspark.sql.types import StructType, StructField, LongType, IntegerType, TimestampType, StringType
 from pyspark.sql.streaming import StreamingQueryListener
 import datetime
@@ -96,11 +96,14 @@ def main():
         .groupBy(
             window(col("event_time"), "30 seconds")
         ) \
-        .agg(count("*").alias("start_event_count")) \
+        .agg(
+            count("*").alias("start_event_count"),
+            spark_max("rateTimestamp").alias("max_rate_ts")) \
         .select(
             col("window.start").alias("window_start"),
             col("window.end").alias("window_end"),
-            col("start_event_count")
+            col("start_event_count"),
+            col("max_rate_ts")
         ) 
         # Removed .orderBy("window_start") because it is not supported in 'update' output mode
 
@@ -111,6 +114,12 @@ def main():
         .queryName("Main_Window_Count") \
         .format("console") \
         .option("truncate", "false") \
+        .start()
+    
+    memory_query = windowed_counts.writeStream \
+        .queryName("InMemoryWindow") \
+        .format("memory") \
+        .outputMode("append") \
         .start()
 
     # Await termination on the main query.

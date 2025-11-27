@@ -16,7 +16,7 @@ spark = (
 )
 spark.sparkContext.setLogLevel("WARN")
 
-csv_path = "/home/siddharth/StreamingDataSystems/endsem_project/generation/mono_signal.csv"
+csv_path = "/home/siddharth/StreamingDataSystems/endsem_project/generation/mono_signal_2.csv"
 
 csv_df = (
     spark.read
@@ -43,14 +43,18 @@ rate_df = (
         .load()
 )
 
-stream_with_id = rate_df.withColumn("id", (col("value") % row_count) + 1)
+stream_with_id = rate_df.withColumn("id", (col("value") % row_count) + 1).withColumn("rate_ts", col("timestamp"))
 
 # --- Global Accumulator Setup ---
 # Global list to accumulate all processed stream data on the driver
 GLOBAL_DATA_ACCUMULATOR = []
 # Create a dummy initial schema for the static view
 # We use the schema of the fully joined/transformed DataFrame for correctness
-initial_schema = csv_df.withColumn("timestamp", col("id")).withColumn("value", col("id")).select("timestamp", "value", "id", *csv_df.columns).schema
+initial_schema = csv_df \
+    .withColumn("timestamp", col("id")) \
+    .withColumn("value", col("id")) \
+    .withColumn("rate_ts", col("id")) \
+    .select("timestamp", "value", "id", "rate_ts", *csv_df.columns).schema
 
 # Initialize a static view for the batch query to read from on startup
 spark.createDataFrame(GLOBAL_DATA_ACCUMULATOR, schema=initial_schema).createOrReplaceTempView("static_data_store")
@@ -70,6 +74,7 @@ def sql_query(timestamp):
     query = f"""
     SELECT 
         count(*) as active_calls_count,
+        max(rate_ts) as max_rate_ts,
         {timestamp} as trigger_time,
         {window_start_ms} as window_start_ms,
         {window_end_ms} as window_end_ms
@@ -121,7 +126,7 @@ spark.streams.addListener(WatermarkListener())
 joined_df = (
     stream_with_id
         .join(csv_df, on="id", how="left")
-        .select("timestamp", "value", "id", *csv_df.columns)
+        .select("timestamp", "value", "id", "rate_ts", *csv_df.columns)
 )
 
 calls_with_ts = joined_df.withColumn(

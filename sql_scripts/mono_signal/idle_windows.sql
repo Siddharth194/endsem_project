@@ -14,5 +14,5 @@ WHERE NOT EXISTS (
       AND c.start_ts > a.end_ts
       AND c.start_ts < b.start_ts
 )
-AND b.start_ts - a.end_ts > 900000
+AND b.start_ts - a.end_ts > 60000
 ORDER BY a.caller, a.end_ts;

@@ -7,9 +7,9 @@ import csv
 import psycopg2
 
 MAX_EVENTS = 100000
-BI_SIGNAL_FILE = "generation/bi_signal.csv"
-MONO_SIGNAL_FILE = "generation/mono_signal.csv"
-TOWER_SIGNAL_FILE = "generation/tower_signal.csv"
+BI_SIGNAL_FILE =    "/home/siddharth/StreamingDataSystems/endsem_project/generation/bi_signal_2.csv"
+MONO_SIGNAL_FILE =  "/home/siddharth/StreamingDataSystems/endsem_project/generation/mono_signal_2.csv"
+TOWER_SIGNAL_FILE = "/home/siddharth/StreamingDataSystems/endsem_project/generation/tower_signal_2.csv"
 DISPOSITIONS = ["connected", "busy", "failed", "connected"]
 
 PG_HOST = "localhost"
@@ -73,7 +73,6 @@ def generate_tower_signal(tower_writer, tower_batch, data):
 
 
 def save_mono_signal(mono_writer, mono_batch, data):
-    print("writing to csv")
     mono_writer.writerow([
         data["unique_id"],
         data["start_timestamp"],

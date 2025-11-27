@@ -15,10 +15,10 @@ DISPOSITIONS = ["connected", "busy", "failed", "connected"]
 PG_HOST = "localhost"
 PG_DB = "sds_project"
 PG_USER = "postgres"
-PG_PASSWORD = "pwd"
+PG_PASSWORD = "root"
 PG_PORT = 5432
 
-INSERT = True
+INSERT = False
 
 
 # ------------------ helpers ------------------
